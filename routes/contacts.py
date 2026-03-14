@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
+from flask_login import login_required, current_user
 from extensions import db
 from models import Contact
 
@@ -6,11 +7,13 @@ contacts_bp = Blueprint('contacts', __name__)
 
 
 @contacts_bp.route('/')
+@login_required
 def index():
     return redirect(url_for('contacts.list_contacts'))
 
 
 @contacts_bp.route('/contacts')
+@login_required
 def list_contacts():
     sort = request.args.get('sort', 'name')
     direction = request.args.get('dir', 'asc')
@@ -26,9 +29,10 @@ def list_contacts():
     col = sort_columns.get(sort, Contact.name)
     order = col.asc() if direction == 'asc' else col.desc()
 
-    pagination = Contact.query.order_by(order).paginate(
-        page=page, per_page=per_page, error_out=False
-    )
+    pagination = (Contact.query
+                  .filter_by(user_id=current_user.id)
+                  .order_by(order)
+                  .paginate(page=page, per_page=per_page, error_out=False))
     return render_template(
         'contacts/list.html',
         pagination=pagination,
@@ -39,16 +43,17 @@ def list_contacts():
 
 
 def _check_duplicate_phone(phone, exclude_id=None):
-    """Return the conflicting contact if phone is already in use, else None."""
+    """Return conflicting contact for the current user, or None."""
     if not phone:
         return None
-    q = Contact.query.filter(Contact.phone == phone)
+    q = Contact.query.filter_by(user_id=current_user.id).filter(Contact.phone == phone)
     if exclude_id:
         q = q.filter(Contact.id != exclude_id)
     return q.first()
 
 
 @contacts_bp.route('/contacts/new', methods=['GET', 'POST'])
+@login_required
 def new_contact():
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
@@ -68,6 +73,7 @@ def new_contact():
             return render_template('contacts/form.html', contact=None, action='Add')
 
         contact = Contact(
+            user_id=current_user.id,
             name=name,
             street=request.form.get('street', '').strip() or None,
             city=request.form.get('city', '').strip() or None,
@@ -96,14 +102,16 @@ def new_contact():
 
 
 @contacts_bp.route('/contacts/<int:id>')
+@login_required
 def detail(id):
-    contact = Contact.query.get_or_404(id)
+    contact = Contact.query.filter_by(id=id, user_id=current_user.id).first_or_404()
     return render_template('contacts/detail.html', contact=contact)
 
 
 @contacts_bp.route('/contacts/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
 def edit_contact(id):
-    contact = Contact.query.get_or_404(id)
+    contact = Contact.query.filter_by(id=id, user_id=current_user.id).first_or_404()
 
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
@@ -122,26 +130,26 @@ def edit_contact(id):
             )
             return render_template('contacts/form.html', contact=contact, action='Edit')
 
-        contact.name = name
-        contact.street = request.form.get('street', '').strip() or None
-        contact.city = request.form.get('city', '').strip() or None
-        contact.state = request.form.get('state', '').strip() or None
+        contact.name        = name
+        contact.street      = request.form.get('street', '').strip() or None
+        contact.city        = request.form.get('city', '').strip() or None
+        contact.state       = request.form.get('state', '').strip() or None
         contact.postal_code = request.form.get('postal_code', '').strip() or None
-        contact.country = request.form.get('country', '').strip() or None
-        contact.phone = phone
-        contact.email = request.form.get('email', '').strip() or None
+        contact.country     = request.form.get('country', '').strip() or None
+        contact.phone       = phone
+        contact.email       = request.form.get('email', '').strip() or None
 
         lat = request.form.get('latitude', '').strip()
         lon = request.form.get('longitude', '').strip()
         if lat and lon:
             try:
-                contact.latitude = float(lat)
+                contact.latitude  = float(lat)
                 contact.longitude = float(lon)
             except ValueError:
-                contact.latitude = None
+                contact.latitude  = None
                 contact.longitude = None
         else:
-            contact.latitude = None
+            contact.latitude  = None
             contact.longitude = None
 
         db.session.commit()
@@ -152,8 +160,9 @@ def edit_contact(id):
 
 
 @contacts_bp.route('/contacts/<int:id>/delete', methods=['POST'])
+@login_required
 def delete_contact(id):
-    contact = Contact.query.get_or_404(id)
+    contact = Contact.query.filter_by(id=id, user_id=current_user.id).first_or_404()
     name = contact.name
     db.session.delete(contact)
     db.session.commit()
@@ -162,6 +171,10 @@ def delete_contact(id):
 
 
 @contacts_bp.route('/map')
+@login_required
 def map_view():
-    contacts = Contact.query.order_by(Contact.name).all()
+    contacts = (Contact.query
+                .filter_by(user_id=current_user.id)
+                .order_by(Contact.name)
+                .all())
     return render_template('map/view.html', contacts=contacts)

@@ -13,13 +13,14 @@
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
   <div class="container-fluid">
-    <a class="navbar-brand fw-bold" href="{{ url_for('contacts.index') }}">
+    <a class="navbar-brand fw-bold" href="{{ url_for('contacts.index') if current_user.is_authenticated else url_for('auth.login') }}">
       <i class="bi bi-book"></i> Address Book
     </a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
       <span class="navbar-toggler-icon"></span>
     </button>
     <div class="collapse navbar-collapse" id="navMenu">
+      {% if current_user.is_authenticated %}
       <ul class="navbar-nav me-auto">
         <li class="nav-item">
           <a class="nav-link {% if request.endpoint == 'contacts.list_contacts' %}active{% endif %}"
@@ -46,13 +47,42 @@
           </a>
         </li>
       </ul>
-      <form class="d-flex" action="{{ url_for('search.search') }}" method="get">
+
+      <form class="d-flex me-3" action="{{ url_for('search.search') }}" method="get">
         <input class="form-control me-2" type="search" name="q" placeholder="Quick search…"
                value="{{ request.args.get('q', '') }}">
         <button class="btn btn-outline-light" type="submit">
           <i class="bi bi-search"></i>
         </button>
       </form>
+
+      <div class="navbar-nav">
+        <span class="navbar-text me-3">
+          <i class="bi bi-person-circle"></i> {{ current_user.username }}
+        </span>
+        <form method="post" action="{{ url_for('auth.logout') }}" class="d-inline">
+          <button type="submit" class="btn btn-outline-light btn-sm">
+            <i class="bi bi-box-arrow-right"></i> Log Out
+          </button>
+        </form>
+      </div>
+
+      {% else %}
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint == 'auth.login' %}active{% endif %}"
+             href="{{ url_for('auth.login') }}">
+            <i class="bi bi-box-arrow-in-right"></i> Log In
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint == 'auth.signup' %}active{% endif %}"
+             href="{{ url_for('auth.signup') }}">
+            <i class="bi bi-person-plus"></i> Sign Up
+          </a>
+        </li>
+      </ul>
+      {% endif %}
     </div>
   </div>
 </nav>

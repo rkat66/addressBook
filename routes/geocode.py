@@ -1,6 +1,7 @@
 import time
 import requests as req
 from flask import Blueprint, request, jsonify, url_for
+from flask_login import login_required, current_user
 from models import Contact
 
 geocode_bp = Blueprint('geocode', __name__)
@@ -49,6 +50,7 @@ def _extract_address(result):
 
 
 @geocode_bp.route('/suggest')
+@login_required
 def suggest():
     """Return up to 5 address suggestions with full structured fields."""
     q = request.args.get('q', '').strip()
@@ -73,6 +75,7 @@ def suggest():
 
 
 @geocode_bp.route('/geocode')
+@login_required
 def geocode():
     q = request.args.get('q', '').strip()
     if not q:
@@ -98,11 +101,12 @@ def geocode():
 
 
 @geocode_bp.route('/contacts/geojson')
+@login_required
 def contacts_geojson():
-    contacts = Contact.query.filter(
-        Contact.latitude.isnot(None),
-        Contact.longitude.isnot(None)
-    ).all()
+    contacts = (Contact.query
+                .filter_by(user_id=current_user.id)
+                .filter(Contact.latitude.isnot(None), Contact.longitude.isnot(None))
+                .all())
 
     features = []
     for c in contacts:

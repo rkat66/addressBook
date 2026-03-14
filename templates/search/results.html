@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Search — Address Book{% endblock %}
+
+{% block content %}
+<h2 class="mb-3"><i class="bi bi-search"></i> Search</h2>
+
+<form method="get" class="mb-4">
+  <div class="input-group input-group-lg">
+    <input type="search" class="form-control" name="q"
+           value="{{ q }}" placeholder="Search by name, city, country, email, phone…"
+           autofocus>
+    <button class="btn btn-primary" type="submit">
+      <i class="bi bi-search"></i> Search
+    </button>
+  </div>
+</form>
+
+{% if q %}
+  {% if results %}
+    <p class="text-muted">{{ results|length }} result{{ 's' if results|length != 1 }} for "<strong>{{ q }}</strong>"</p>
+    <div class="table-responsive">
+      <table class="table table-hover table-contacts align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Name</th>
+            <th>City</th>
+            <th>Country</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th class="text-center"><i class="bi bi-geo-alt"></i></th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in results %}
+          <tr>
+            <td>
+              <a href="{{ url_for('contacts.detail', id=c.id) }}" class="fw-semibold text-decoration-none">
+                {{ c.name }}
+              </a>
+            </td>
+            <td>{{ c.city or '—' }}</td>
+            <td>{{ c.country or '—' }}</td>
+            <td>
+              {% if c.email %}<a href="mailto:{{ c.email }}">{{ c.email }}</a>{% else %}—{% endif %}
+            </td>
+            <td>
+              {% if c.phone %}<a href="tel:{{ c.phone }}">{{ c.phone }}</a>{% else %}—{% endif %}
+            </td>
+            <td class="text-center">
+              {% if c.has_coordinates %}
+                <i class="bi bi-geo-alt-fill text-success"></i>
+              {% else %}
+                <i class="bi bi-geo-alt text-muted"></i>
+              {% endif %}
+            </td>
+            <td>
+              <a href="{{ url_for('contacts.edit_contact', id=c.id) }}"
+                 class="btn btn-sm btn-outline-secondary" title="Edit">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <form method="post" action="{{ url_for('contacts.delete_contact', id=c.id) }}"
+                    class="d-inline"
+                    onsubmit="return confirm('Delete {{ c.name }}?')">
+                <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="alert alert-warning">
+      <i class="bi bi-exclamation-triangle"></i>
+      No contacts found for "<strong>{{ q }}</strong>".
+      <a href="{{ url_for('contacts.new_contact') }}" class="alert-link">Add a new contact?</a>
+    </div>
+  {% endif %}
+{% else %}
+  <p class="text-muted">Enter a name, city, country, email, or phone number to search.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}{{ action }} Contact — Address Book{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2>
+        <i class="bi bi-person-{{ 'plus' if action == 'Add' else 'gear' }}"></i>
+        {{ action }} Contact
+      </h2>
+      <a href="{{ url_for('contacts.list_contacts') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back
+      </a>
+    </div>
+
+    <form method="post">
+      <div class="card shadow-sm">
+        <div class="card-header fw-semibold">
+          <i class="bi bi-person"></i> Personal Info
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <label for="name" class="form-label">Full Name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="name" name="name"
+                     value="{{ contact.name if contact else '' }}"
+                     placeholder="e.g. Jane Smith" required autofocus>
+            </div>
+            <div class="col-md-6">
+              <label for="phone" class="form-label">Phone</label>
+              <input type="tel" class="form-control" id="phone" name="phone"
+                     value="{{ contact.phone if contact else '' }}"
+                     placeholder="+1 555-000-0000">
+            </div>
+            <div class="col-md-6">
+              <label for="email" class="form-label">Email</label>
+              <input type="email" class="form-control" id="email" name="email"
+                     value="{{ contact.email if contact else '' }}"
+                     placeholder="jane@example.com">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm mt-3">
+        <div class="card-header fw-semibold">
+          <i class="bi bi-geo-alt"></i> Address
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <label for="street" class="form-label">
+                Street Address
+                <small class="text-muted fw-normal">— start typing to search and auto-fill</small>
+              </label>
+              <input type="text" class="form-control" id="street" name="street"
+                     value="{{ contact.street if contact else '' }}"
+                     placeholder="e.g. 1600 Amphitheatre Pkwy, Tokyo Station, Champs-Élysées…">
+            </div>
+            <div class="col-md-6">
+              <label for="city" class="form-label">City</label>
+              <input type="text" class="form-control" id="city" name="city"
+                     value="{{ contact.city if contact else '' }}"
+                     placeholder="Tokyo">
+            </div>
+            <div class="col-md-4">
+              <label for="state" class="form-label">State / Province</label>
+              <input type="text" class="form-control" id="state" name="state"
+                     value="{{ contact.state if contact else '' }}"
+                     placeholder="California">
+            </div>
+            <div class="col-md-2">
+              <label for="postal_code" class="form-label">Postal Code</label>
+              <input type="text" class="form-control" id="postal_code" name="postal_code"
+                     value="{{ contact.postal_code if contact else '' }}"
+                     placeholder="94103">
+            </div>
+            <div class="col-md-6">
+              <label for="country" class="form-label">Country</label>
+              <input type="text" class="form-control" id="country" name="country"
+                     value="{{ contact.country if contact else '' }}"
+                     placeholder="Japan">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm mt-3">
+        <div class="card-header fw-semibold">
+          <i class="bi bi-pin-map"></i> Coordinates
+          <small class="text-muted fw-normal ms-2">— used for map view</small>
+        </div>
+        <div class="card-body">
+          <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+              <label for="latitude" class="form-label">Latitude</label>
+              <input type="text" class="form-control" id="latitude" name="latitude"
+                     value="{{ contact.latitude if contact else '' }}"
+                     placeholder="35.6762">
+            </div>
+            <div class="col-md-4">
+              <label for="longitude" class="form-label">Longitude</label>
+              <input type="text" class="form-control" id="longitude" name="longitude"
+                     value="{{ contact.longitude if contact else '' }}"
+                     placeholder="139.6503">
+            </div>
+            <div class="col-md-4">
+              <button type="button" class="btn btn-outline-info w-100" onclick="geocodeAddress()">
+                <i class="bi bi-geo"></i> Geocode Address
+              </button>
+            </div>
+            <div class="col-12">
+              <div id="geocode-status" class="d-none"></div>
+            </div>
+          </div>
+
+          {% if contact and contact.has_coordinates %}
+          <div id="mini-map" class="mt-3 rounded overflow-hidden" style="height:250px;"></div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="mt-4 d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-lg"></i> {{ action }} Contact
+        </button>
+        <a href="{{ url_for('contacts.list_contacts') }}" class="btn btn-outline-secondary">Cancel</a>
+        {% if contact %}
+        <div class="ms-auto">
+          <form method="post" action="{{ url_for('contacts.delete_contact', id=contact.id) }}"
+                onsubmit="return confirm('Delete {{ contact.name }}? This cannot be undone.')">
+            <button type="submit" class="btn btn-outline-danger">
+              <i class="bi bi-trash"></i> Delete
+            </button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if contact and contact.has_coordinates %}
+<script>
+  const miniMap = L.map('mini-map').setView([{{ contact.latitude }}, {{ contact.longitude }}], 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(miniMap);
+  L.marker([{{ contact.latitude }}, {{ contact.longitude }}]).addTo(miniMap);
+</script>
+{% endif %}
+{% endblock %}

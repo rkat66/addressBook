@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Map — Address Book{% endblock %}
+{% block body_class %}map-page{% endblock %}
+{% block container_class %}p-0{% endblock %}
+
+{% block content %}
+<div style="display:flex; height:calc(100vh - 56px);">
+
+  {# ── Sidebar ── #}
+  <div id="sidebar" style="width:300px; min-width:220px; overflow-y:auto; border-right:1px solid #dee2e6; background:#fff; flex-shrink:0;">
+    <div class="p-2 border-bottom bg-light d-flex align-items-center gap-2">
+      <input id="sidebar-search" type="search" class="form-control form-control-sm"
+             placeholder="Filter contacts…">
+      <span class="text-muted small text-nowrap" id="sidebar-count"></span>
+    </div>
+
+    <ul class="list-group list-group-flush" id="contact-list">
+      {% for c in contacts %}
+      <li class="list-group-item list-group-item-action px-3 py-2 contact-item"
+          data-id="{{ c.id }}"
+          data-name="{{ c.name | lower }}"
+          data-lat="{{ c.latitude or '' }}"
+          data-lon="{{ c.longitude or '' }}"
+          style="cursor:pointer;">
+        <div class="d-flex justify-content-between align-items-start">
+          <div class="me-2 text-truncate">
+            <div class="fw-semibold text-truncate">{{ c.name }}</div>
+            <div class="text-muted small text-truncate">
+              {{ c.display_address or 'No address' }}
+            </div>
+          </div>
+          {% if c.has_coordinates %}
+            <i class="bi bi-geo-alt-fill text-success flex-shrink-0" title="Geocoded"></i>
+          {% else %}
+            <i class="bi bi-geo-alt text-muted flex-shrink-0" title="No coordinates"></i>
+          {% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+
+    {% if not contacts %}
+    <div class="p-3 text-center text-muted">
+      <i class="bi bi-people display-6"></i>
+      <p class="mt-2">No contacts yet.<br>
+        <a href="{{ url_for('contacts.new_contact') }}">Add one</a>
+      </p>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── Map ── #}
+  <div id="map" style="flex:1;"></div>
+</div>
+
+{# Toast for contacts without coordinates #}
+<div id="no-coord-toast" class="toast align-items-center text-bg-warning border-0"
+     style="position:fixed; bottom:1rem; right:1rem; z-index:2000; min-width:260px;"
+     role="alert" aria-live="assertive">
+  <div class="d-flex">
+    <div class="toast-body" id="no-coord-msg"></div>
+    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // ── Map setup ──────────────────────────────────────────────────────────────
+  const map = L.map('map').setView([20, 0], 2);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+
+  // Map of contact id → Leaflet marker
+  const markers = {};
+  const bounds  = [];
+
+  // ── Build markers from GeoJSON ─────────────────────────────────────────────
+  fetch('/api/contacts/geojson')
+    .then(r => r.json())
+    .then(geojson => {
+      (geojson.features || []).forEach(f => {
+        const [lon, lat] = f.geometry.coordinates;
+        const p = f.properties;
+
+        let popup = `<b>${esc(p.name)}</b>`;
+        if (p.address) popup += `<br>${esc(p.address)}`;
+        if (p.phone)   popup += `<br><i class="bi bi-telephone"></i> <a href="tel:${esc(p.phone)}">${esc(p.phone)}</a>`;
+        if (p.email)   popup += `<br><i class="bi bi-envelope"></i> <a href="mailto:${esc(p.email)}">${esc(p.email)}</a>`;
+        popup += `<br><a href="${p.url}" class="btn btn-sm btn-outline-primary mt-1">View Detail</a>`;
+
+        const marker = L.marker([lat, lon]).addTo(map).bindPopup(popup);
+        markers[p.id] = marker;
+        bounds.push([lat, lon]);
+      });
+
+      if (bounds.length === 1) {
+        map.setView(bounds[0], 13);
+      } else if (bounds.length > 1) {
+        map.fitBounds(bounds, { padding: [50, 50] });
+      }
+    })
+    .catch(() => {});
+
+  // ── Sidebar click ──────────────────────────────────────────────────────────
+  const toast    = new bootstrap.Toast(document.getElementById('no-coord-toast'), { delay: 3500 });
+  const toastMsg = document.getElementById('no-coord-msg');
+
+  document.getElementById('contact-list').addEventListener('click', e => {
+    const item = e.target.closest('.contact-item');
+    if (!item) return;
+
+    // Highlight active
+    document.querySelectorAll('.contact-item').forEach(el => el.classList.remove('active'));
+    item.classList.add('active');
+
+    const id  = parseInt(item.dataset.id);
+    const lat = parseFloat(item.dataset.lat);
+    const lon = parseFloat(item.dataset.lon);
+
+    if (markers[id]) {
+      map.flyTo([lat, lon], 14, { duration: 0.8 });
+      markers[id].openPopup();
+    } else {
+      const name = item.querySelector('.fw-semibold').textContent.trim();
+      toastMsg.innerHTML = `<i class="bi bi-geo-alt"></i> <b>${esc(name)}</b> has no coordinates.
+        <a href="/contacts/${id}/edit" class="alert-link">Edit to geocode.</a>`;
+      toast.show();
+    }
+  });
+
+  // ── Sidebar filter ─────────────────────────────────────────────────────────
+  const searchInput  = document.getElementById('sidebar-search');
+  const countEl      = document.getElementById('sidebar-count');
+  const allItems     = Array.from(document.querySelectorAll('.contact-item'));
+
+  function updateCount() {
+    const visible = allItems.filter(el => el.style.display !== 'none').length;
+    countEl.textContent = visible + ' / ' + allItems.length;
+  }
+
+  searchInput.addEventListener('input', () => {
+    const term = searchInput.value.trim().toLowerCase();
+    allItems.forEach(el => {
+      el.style.display = (!term || el.dataset.name.includes(term)) ? '' : 'none';
+    });
+    updateCount();
+  });
+
+  updateCount();
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function esc(str) {
+    if (!str) return '';
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+              .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+</script>
+{% endblock %}

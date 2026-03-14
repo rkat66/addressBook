@@ -1,0 +1,7 @@
+.leaflet-container { z-index: 1; }
+
+.table-contacts td,
+.table-contacts th { vertical-align: middle; }
+
+body.map-page { padding: 0; overflow: hidden; }
+body.map-page .navbar { position: relative; z-index: 1100; }

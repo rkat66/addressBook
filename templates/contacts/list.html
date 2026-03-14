@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Contacts — Address Book{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2><i class="bi bi-people"></i> Contacts
+    <small class="text-muted fs-6">({{ pagination.total }} total)</small>
+  </h2>
+  <a href="{{ url_for('contacts.new_contact') }}" class="btn btn-primary">
+    <i class="bi bi-person-plus"></i> Add New
+  </a>
+</div>
+
+{% if contacts %}
+<div class="table-responsive">
+  <table class="table table-hover table-contacts align-middle">
+    <thead class="table-light">
+      <tr>
+        {% set cols = [('name','Name'), ('city','City'), ('country','Country'), ('email','Email')] %}
+        {% for col_key, col_label in cols %}
+          {% set next_dir = 'desc' if (sort == col_key and direction == 'asc') else 'asc' %}
+          <th>
+            <a href="{{ url_for('contacts.list_contacts', sort=col_key, dir=next_dir) }}"
+               class="text-decoration-none text-dark">
+              {{ col_label }}
+              {% if sort == col_key %}
+                <i class="bi bi-caret-{{ 'down' if direction == 'desc' else 'up' }}-fill text-primary"></i>
+              {% endif %}
+            </a>
+          </th>
+        {% endfor %}
+        <th>Phone</th>
+        <th class="text-center"><i class="bi bi-geo-alt" title="Geocoded"></i></th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in contacts %}
+      <tr>
+        <td>
+          <a href="{{ url_for('contacts.detail', id=c.id) }}" class="fw-semibold text-decoration-none">
+            {{ c.name }}
+          </a>
+        </td>
+        <td>{{ c.city or '—' }}</td>
+        <td>{{ c.country or '—' }}</td>
+        <td>
+          {% if c.email %}
+            <a href="mailto:{{ c.email }}">{{ c.email }}</a>
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if c.phone %}
+            <a href="tel:{{ c.phone }}">{{ c.phone }}</a>
+          {% else %}—{% endif %}
+        </td>
+        <td class="text-center">
+          {% if c.has_coordinates %}
+            <i class="bi bi-geo-alt-fill text-success" title="{{ c.latitude }}, {{ c.longitude }}"></i>
+          {% else %}
+            <i class="bi bi-geo-alt text-muted"></i>
+          {% endif %}
+        </td>
+        <td>
+          <a href="{{ url_for('contacts.edit_contact', id=c.id) }}"
+             class="btn btn-sm btn-outline-secondary" title="Edit">
+            <i class="bi bi-pencil"></i>
+          </a>
+          <form method="post" action="{{ url_for('contacts.delete_contact', id=c.id) }}"
+                class="d-inline"
+                onsubmit="return confirm('Delete {{ c.name }}?')">
+            <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+              <i class="bi bi-trash"></i>
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if pagination.pages > 1 %}
+<nav>
+  <ul class="pagination justify-content-center">
+    <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+      <a class="page-link" href="{{ url_for('contacts.list_contacts', page=pagination.prev_num, sort=sort, dir=direction) }}">
+        &laquo; Prev
+      </a>
+    </li>
+    {% for p in pagination.iter_pages(left_edge=2, right_edge=2, left_current=2, right_current=2) %}
+      {% if p %}
+        <li class="page-item {% if p == pagination.page %}active{% endif %}">
+          <a class="page-link" href="{{ url_for('contacts.list_contacts', page=p, sort=sort, dir=direction) }}">{{ p }}</a>
+        </li>
+      {% else %}
+        <li class="page-item disabled"><span class="page-link">…</span></li>
+      {% endif %}
+    {% endfor %}
+    <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+      <a class="page-link" href="{{ url_for('contacts.list_contacts', page=pagination.next_num, sort=sort, dir=direction) }}">
+        Next &raquo;
+      </a>
+    </li>
+  </ul>
+</nav>
+{% endif %}
+
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-people display-1"></i>
+  <p class="mt-3 fs-5">No contacts yet.</p>
+  <a href="{{ url_for('contacts.new_contact') }}" class="btn btn-primary">Add your first contact</a>
+</div>
+{% endif %}
+{% endblock %}

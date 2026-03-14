@@ -1,21 +1,25 @@
 # Address Book
 
-A Flask web application for managing an international address book with map support.
+A Flask web application for managing an international address book with per-user accounts, map support, and address autocomplete.
 
 ## Features
 
+- **Multi-user accounts** — each user has a private, isolated address book; sign up, log in, and log out
 - **Add / Edit / Delete** contacts with full international address fields
+- **Street address autocomplete** — type to get live suggestions that auto-fill all address fields and coordinates
 - **Search** across name, street, city, state, country, email, phone, and postal code
 - **Geocode** any address with one click — powered by OpenStreetMap Nominatim (free, no API key required)
-- **Map view** — all geocoded contacts plotted on an interactive Leaflet map with clickable popups
+- **Map view** — all geocoded contacts plotted on an interactive Leaflet map with a contacts sidebar
 - **Mini-map** on each contact's detail and edit page
 - **Pagination** and sortable columns on the contact list
+- **Unique phone numbers** enforced per user account
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Web framework | [Flask](https://flask.palletsprojects.com/) 3.0 |
+| Web framework | [Flask](https://flask.palletsprojects.com/) 3.1+ |
+| Authentication | [Flask-Login](https://flask-login.readthedocs.io/) |
 | Database ORM | [SQLAlchemy](https://www.sqlalchemy.org/) via Flask-SQLAlchemy |
 | Database | SQLite (zero-config, file-based) |
 | Maps | [Leaflet.js](https://leafletjs.com/) + [OpenStreetMap](https://www.openstreetmap.org/) tiles |
@@ -27,16 +31,20 @@ A Flask web application for managing an international address book with map supp
 ```
 addressBook/
 ├── app.py                      # Application factory and entry point
-├── extensions.py               # Shared SQLAlchemy db instance
-├── models.py                   # Contact database model
+├── extensions.py               # Shared db and LoginManager instances
+├── models.py                   # User and Contact database models
 ├── config.py                   # Development / production configuration
 ├── requirements.txt
 ├── routes/
+│   ├── auth.py                 # Signup, login, logout
 │   ├── contacts.py             # CRUD routes: list, add, edit, delete, detail, map
 │   ├── search.py               # Full-text search
 │   └── geocode.py              # Nominatim proxy + GeoJSON API endpoint
 ├── templates/
 │   ├── base.html               # Base layout with navbar
+│   ├── auth/
+│   │   ├── login.html          # Login form
+│   │   └── signup.html         # Sign up form
 │   ├── contacts/
 │   │   ├── list.html           # Paginated, sortable contact list
 │   │   ├── form.html           # Add / edit form (shared)
@@ -44,10 +52,10 @@ addressBook/
 │   ├── search/
 │   │   └── results.html        # Search results
 │   └── map/
-│       └── view.html           # Full-screen map view
+│       └── view.html           # Full-screen map view with sidebar
 └── static/
     ├── css/app.css
-    └── js/geocode.js           # Client-side geocode button handler
+    └── js/geocode.js           # Address autocomplete and geocode button
 ```
 
 ## Setup
@@ -77,12 +85,23 @@ Open **http://127.0.0.1:5000** in your browser. The SQLite database (`addressboo
 
 ## Usage
 
+### Creating an Account
+
+1. Click **Sign Up** in the navbar.
+2. Choose a username (minimum 3 characters) and password (minimum 6 characters).
+3. You are logged in immediately and taken to your (empty) address book.
+
+### Logging In
+
+Click **Log In**, enter your username and password. Check **Remember me** to stay logged in across browser sessions.
+
 ### Adding a Contact
 
 1. Click **Add New** in the navbar.
-2. Fill in any combination of fields — only **Name** is required.
-3. Click **Geocode Address** to automatically look up latitude/longitude from the address fields.
-4. Click **Add Contact** to save.
+2. Start typing in the **Street Address** field — a dropdown of suggestions appears automatically.
+3. Select a suggestion to auto-fill the street, city, state, postal code, country, and coordinates all at once.
+4. Alternatively, fill in address fields manually and click **Geocode Address**.
+5. Only **Name** is required. Click **Add Contact** to save.
 
 ### Searching
 
@@ -90,9 +109,15 @@ Use the search bar in the navbar for a quick search, or go to **Search** for a f
 
 ### Map View
 
-Click **Map** in the navbar to see all geocoded contacts on an interactive world map. Click any marker to see the contact's name, address, and a link to their detail page.
+Click **Map** in the navbar to see all your geocoded contacts on an interactive world map.
 
-Contacts without coordinates (the map pin icon is grey on the list page) will not appear on the map until geocoded. Open the contact's edit page and click **Geocode Address**.
+- The **sidebar** lists every contact — click one to fly to its marker on the map.
+- Contacts without coordinates show a grey pin; clicking them shows a link to edit and geocode them.
+- Use the **filter box** at the top of the sidebar to narrow the list by name.
+
+### Data Isolation
+
+Each user account has a completely separate address book. Contacts created by one user are never visible to another user.
 
 ## Address Fields
 
@@ -101,23 +126,24 @@ All fields except Name are optional, supporting international addresses of any f
 | Field | Description |
 |---|---|
 | Name | Full name (required) |
-| Street | Street address, including apartment/suite |
+| Street | Street address, including apartment/suite — supports autocomplete |
 | City | City or locality |
 | State / Province | State, province, prefecture, or equivalent |
 | Postal Code | ZIP, postcode, or equivalent |
 | Country | Country name |
-| Phone | Any format, including international (`+81 3-...`) |
+| Phone | Any format, including international (`+81 3-...`) — unique per account |
 | Email | Email address |
-| Latitude / Longitude | Auto-filled by Geocode button, or enter manually |
+| Latitude / Longitude | Auto-filled by autocomplete or Geocode button, or enter manually |
 
 ## API Endpoints
 
-These are used internally by the frontend but are also accessible directly.
+All endpoints require an active login session.
 
 | Endpoint | Description |
 |---|---|
-| `GET /api/geocode?q=<address>` | Geocode an address string via Nominatim. Returns `{"lat": ..., "lon": ...}` |
-| `GET /api/contacts/geojson` | All geocoded contacts as a GeoJSON FeatureCollection |
+| `GET /api/suggest?q=<query>` | Address autocomplete — returns up to 5 structured suggestions |
+| `GET /api/geocode?q=<address>` | Geocode a single address, returns all structured fields + coordinates |
+| `GET /api/contacts/geojson` | Current user's geocoded contacts as a GeoJSON FeatureCollection |
 
 ## Configuration
 
@@ -141,7 +167,8 @@ python app.py
 ## Geocoding Notes
 
 - Geocoding is powered by [Nominatim](https://nominatim.openstreetmap.org/), the geocoding service behind OpenStreetMap.
-- The app proxies all geocoding requests server-side to comply with Nominatim's [Usage Policy](https://operations.osmfoundation.org/policies/nominatim/): a `User-Agent` header is sent and requests are rate-limited to one per second.
+- All requests are proxied server-side to comply with Nominatim's [Usage Policy](https://operations.osmfoundation.org/policies/nominatim/): a `User-Agent` header is sent and requests are rate-limited to one per second.
+- The street autocomplete uses a 400ms debounce to avoid excessive requests while typing.
 - No API key or account is required.
 - Coordinates are stored in the database after geocoding, so the map works offline once contacts are geocoded.
 
